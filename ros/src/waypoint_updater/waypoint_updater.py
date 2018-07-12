@@ -60,7 +60,7 @@ class WaypointUpdater(object):
             self.waypoint_tree)
 
     def loop(self):
-        # As recommmended, take control of update frequency
+        # As recommended, take control of update frequency
         rate = rospy.Rate(50)
         while not rospy.is_shutdown():
             if self.pose is not None and self.initialized_waypoints():
@@ -132,7 +132,7 @@ class WaypointUpdater(object):
         if not self.initialized_waypoints():
             self.base_lane = waypoints
             self.base_waypoints = waypoints
-            self.waypoints_2d = [ \
+            self.waypoints_2d = [
                 position(waypoint) for waypoint in waypoints.waypoints]
             self.waypoint_tree = KDTree(self.waypoints_2d)
 

@@ -11,35 +11,38 @@ ONE_MPH = 0.44704
 
 class Controller(object):
     def __init__(
-        self,
-        vehicle_mass,
-        fuel_capacity,
-        brake_deadband,
-        decel_limit,
-        accel_limit,
-        wheel_radius,
-        wheel_base,
-        steer_ratio,
-        max_lat_accel,
-        max_steer_angle,
-        max_throttle):
-        # Yaw controller to controller the turning
-        vehicle_min_velocity = 0.1
-        self.yaw_controller = YawController(
+            self,
+            vehicle_mass,
+            fuel_capacity,
+            brake_deadband,
+            decel_limit,
+            accel_limit,
+            wheel_radius,
             wheel_base,
             steer_ratio,
-            vehicle_min_velocity,
             max_lat_accel,
-            max_steer_angle)
+            max_steer_angle,
+            max_throttle):
+        # Yaw controller to controller the turning
+        self.vehicle_min_velocity = .1
+        self.yaw_controller = YawController(
+            wheel_base=wheel_base,
+            steer_ratio=steer_ratio,
+            min_speed=self.vehicle_min_velocity,
+            max_lat_accel=max_lat_accel,
+            max_steer_angle=max_steer_angle)
 
-        kp, ki, kd, mn, mx = .3, .1, 0., 0., max_throttle
-        self.throttle_controller = PID(kp, ki, kd, mn, mx)
+        self.steering_controller = PID(
+            kp=.0, ki=.001, kd=.1, min=-max_steer_angle, max=max_steer_angle)
+
+        # Throttle controller
+        self.throttle_controller = PID(
+            kp=.8, ki=.001, kd=.1, min=0, max=max_throttle)
 
         # Remove high frequency noise on the velocity
-        tau, ts = .5, .02
-        self.low_pass = LowPassFilter(tau, ts)
+        self.low_pass = LowPassFilter(tau=.5, ts=.02)
 
-        # These can be used by a new controller to refine the driving
+        # Assume the tank is full
         fuel_mass = fuel_capacity * GAS_DENSITY
         self.total_mass = vehicle_mass + fuel_mass
         self.decel_limit = decel_limit
@@ -48,42 +51,46 @@ class Controller(object):
         self.last_time = rospy.get_time()
 
     def control(
-        self,
-        current_velocity,
-        dbw_enabled,
-        linear_velocity,
-        angular_velocity):
+            self,
+            current_velocity,
+            dbw_enabled,
+            linear_velocity,
+            angular_velocity,
+            cte):
         if not dbw_enabled:
             self.throttle_controller.reset()
+            self.steering_controller.reset()
             return .0, .0, .0
 
         current_velocity = self.low_pass.filter(current_velocity)
 
+        # Calculate the velocity error
+        dv = linear_velocity - current_velocity
+
+        # Update time
+        current_time = rospy.get_time()
+        dt = current_time - self.last_time
+        self.last_time = current_time
+
+        # Calculate the predictive path and correct for the cross track error
         steering = self.yaw_controller.get_steering(
             linear_velocity,
             angular_velocity,
             current_velocity)
+        steering -= self.steering_controller.step(cte, dt)
 
-        # Calculate the velocity error
-        delta_velocity = linear_velocity - current_velocity
-        self.last_velocity = current_velocity
-
-        # Update time
-        current_time = rospy.get_time()
-        sample_time = current_time - self.last_time
-        self.last_time = current_time
-
-        throttle = self.throttle_controller.step(delta_velocity, sample_time)
+        # Calculate the throttle and brake
+        throttle = self.throttle_controller.step(dv, dt)
         brake = 0.
 
         eps = 1e-6
-        if abs(linear_velocity) < eps and current_velocity < 0.1:
+        if abs(linear_velocity) < eps and current_velocity < self.vehicle_min_velocity:
             # Keep car in place when it is stopped
             throttle = 0.
             brake = 400.
-        elif throttle < .1 and abs(delta_velocity) < eps:
+        elif throttle < .1 and abs(dv) < eps:
             throttle = 0.
-            decel = max(delta_velocity, self.decel_limit)
+            decel = max(dv, self.decel_limit)
             brake = abs(decel) * self.total_mass * self.wheel_radius
 
         return throttle, brake, steering
