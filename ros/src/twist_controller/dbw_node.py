@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 
 import rospy
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, Float32
 from dbw_mkz_msgs.msg import ThrottleCmd, SteeringCmd, BrakeCmd, SteeringReport
-from geometry_msgs.msg import TwistStamped
-import math
+from geometry_msgs.msg import TwistStamped, PoseStamped
+from geometry_msgs.msg import PoseStamped
+from styx_msgs.msg import Lane, Waypoint
+import numpy as np
 
 from twist_controller import Controller
 
@@ -30,6 +32,7 @@ Once you have the proposed throttle, brake, and steer values, publish it on the 
 that we have created in the `__init__` function.
 
 '''
+
 
 class DBWNode(object):
     def __init__(self):
@@ -73,6 +76,13 @@ class DBWNode(object):
         rospy.Subscriber('/twist_cmd', TwistStamped, self.twist_cb)
         rospy.Subscriber('/current_velocity', TwistStamped, self.velocity_cb)
 
+        # To compute the CTE
+        rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
+        rospy.Subscriber('/final_waypoints', Lane, self.waypoints_cb)
+
+        self.cte_pub = rospy.Publisher('/vehicle/cte',
+                                       Float32, queue_size=1)
+
         self.current_velocity = None
         self.current_ang_velocity = None
         self.dbw_enabled = None
@@ -80,19 +90,28 @@ class DBWNode(object):
         self.angular_velocity = None
         self.throttle = self.steering = self.brake = 0
 
+        self.current_position = None
+        self.waypoints = None
+
         self.loop()
 
     def loop(self):
         rate = rospy.Rate(50) # 50Hz
         while not rospy.is_shutdown():
-            if not None in (self.current_velocity,
+            if None not in (self.current_velocity,
                             self.linear_velocity,
                             self.angular_velocity):
+                cte = 0.
+                if None not in (self.current_position, self.waypoints):
+                    cte = self.calculate_cte()
+                    self.cte_pub.publish(cte)
+
                 self.throttle, self.brake, self.steering = \
                     self.controller.control(self.current_velocity,
                                             self.dbw_enabled,
                                             self.linear_velocity,
-                                            self.angular_velocity)
+                                            self.angular_velocity,
+                                            cte)
                 if self.dbw_enabled:
                     self.publish(self.throttle, self.brake, self.steering)
                 rate.sleep()
@@ -106,6 +125,43 @@ class DBWNode(object):
 
     def velocity_cb(self, msg):
         self.current_velocity = msg.twist.linear.x
+
+    def pose_cb(self, msg):
+        self.current_position = [msg.pose.position.x, msg.pose.position.y]
+
+    def waypoints_cb(self, msg):
+        self.waypoints = msg.waypoints
+
+    def calculate_cte(self):
+        def position(waypoint):
+            return [waypoint.pose.pose.position.x,
+                    waypoint.pose.pose.position.y]
+
+        # Get waypoint positions relative to the first
+        positions = np.array(
+            [position(waypoint) for waypoint in self.waypoints])
+        origin = positions[0]
+        positions = positions - origin
+
+        # Rotate the positions so that they are oriented in the direction of travel
+        offset = 10
+        angle = np.arctan2(positions[offset, 1], positions[offset, 0])
+        rotation = np.array([
+            [np.cos(angle), -np.sin(angle)],
+            [np.sin(angle), np.cos(angle)],
+            ])
+        positions = np.dot(positions, rotation)
+
+        # Transform the current pose of the car to be in the car's coordinate system
+        translated = np.array(self.current_position) - origin
+        rotated = np.dot(translated, rotation)
+
+        # The CTE is simply the difference between the actual position and the expected position
+        coefficients = np.polyfit(positions[:, 0], positions[:, 1], deg=2)
+        expected = np.polyval(coefficients, rotated[0])
+        actual = rotated[1]
+
+        return actual - expected
 
     def publish(self, throttle, brake, steer):
         tcmd = ThrottleCmd()
