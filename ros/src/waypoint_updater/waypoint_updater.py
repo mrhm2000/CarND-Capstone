@@ -61,7 +61,7 @@ class WaypointUpdater(object):
 
     def loop(self):
         # As recommended, take control of update frequency
-        rate = rospy.Rate(50)
+        rate = rospy.Rate(5)
         while not rospy.is_shutdown():
             if self.pose is not None and self.initialized_waypoints():
                 closest_waypoint_index = self.get_closest_waypoint_index()

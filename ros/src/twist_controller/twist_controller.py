@@ -83,12 +83,11 @@ class Controller(object):
         throttle = self.throttle_controller.step(dv, dt)
         brake = 0.
 
-        eps = 1e-6
-        if abs(linear_velocity) < eps and current_velocity < self.vehicle_min_velocity:
+        if linear_velocity < 0. and current_velocity < self.vehicle_min_velocity:
             # Keep car in place when it is stopped
             throttle = 0.
             brake = 400.
-        elif throttle < .1 and abs(dv) < eps:
+        elif throttle < .1 and dv < 0.:
             throttle = 0.
             decel = max(dv, self.decel_limit)
             brake = abs(decel) * self.total_mass * self.wheel_radius
