@@ -64,8 +64,9 @@ class WaypointUpdater(object):
         rate = rospy.Rate(5)
         while not rospy.is_shutdown():
             if self.pose is not None and self.initialized_waypoints():
-                closest_waypoint_index = self.get_closest_waypoint_index()
-                self.publish_waypoints(closest_waypoint_index)
+                index = self.get_closest_waypoint_index()
+                lane = self.generate_lane(index)
+                self.final_waypoints_pub.publish(lane)
             rate.sleep()
 
     def get_closest_waypoint_index(self):
@@ -89,21 +90,15 @@ class WaypointUpdater(object):
 
         return closest_index
 
-    def publish_waypoints(self, closest_waypoint_index):
-        final_lane = self.generate_lane()
-        self.final_waypoints_pub.publish(final_lane)
+    def is_stopline_ahead(self, lookahead_index):
+        return self.stopline_wp_idx != -1 and self.stopline_wp_idx < lookahead_index
 
-    def generate_lane(self):
+    def generate_lane(self, index):
         lane = Lane()
-        closest_idx = self.get_closest_waypoint_index()
-        farthest_idx = closest_idx + LOOKAHEAD_WPS
-        base_waypoints = self.base_lane.waypoints[closest_idx:farthest_idx]
-
-        if self.stopline_wp_idx == -1 or (self.stopline_wp_idx >= farthest_idx):
-            lane.waypoints = base_waypoints
-        else:
-            lane.waypoints = self.decelerate_waypoints(base_waypoints, closest_idx)
-
+        lookahead_index = index + LOOKAHEAD_WPS
+        waypoints = self.base_lane.waypoints[index:lookahead_index]
+        lane.waypoints = waypoints if not self.is_stopline_ahead(
+            lookahead_index) else self.decelerate_waypoints(waypoints, index)
         return lane
 
     def decelerate_waypoints(self, waypoints, closest_idx):
@@ -114,8 +109,8 @@ class WaypointUpdater(object):
             stop_idx = max(self.stopline_wp_idx - closest_idx - 2, 0)
             dist = self.distance(waypoints, i, stop_idx)
             vel = math.sqrt(2 * MAX_DECEL * dist)
-            if vel <1.:
-                vel = 0
+            if vel < 1.:
+                vel = 0.
 
             p.twist.twist.linear.x = min(vel, wp.twist.twist.linear.x)
             temp.append(p)
@@ -142,12 +137,6 @@ class WaypointUpdater(object):
     def obstacle_cb(self, msg):
         # TODO: Callback for /obstacle_waypoint message. We will implement it later
         pass
-
-    def get_waypoint_velocity(self, waypoint):
-        return waypoint.twist.twist.linear.x
-
-    def set_waypoint_velocity(self, waypoints, waypoint, velocity):
-        waypoints[waypoint].twist.twist.linear.x = velocity
 
     def distance(self, waypoints, wp1, wp2):
         dist = 0
