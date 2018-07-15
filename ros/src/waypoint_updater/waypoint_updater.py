@@ -52,15 +52,7 @@ class WaypointUpdater(object):
 
         self.loop()
 
-    def initialized_waypoints(self):
-        return None not in (
-            self.base_lane,
-            self.base_waypoints,
-            self.waypoints_2d,
-            self.waypoint_tree)
-
     def loop(self):
-        # As recommended, take control of update frequency
         rate = rospy.Rate(5)
         while not rospy.is_shutdown():
             if self.pose is not None and self.initialized_waypoints():
@@ -68,6 +60,13 @@ class WaypointUpdater(object):
                 lane = self.generate_lane(index)
                 self.final_waypoints_pub.publish(lane)
             rate.sleep()
+
+    def initialized_waypoints(self):
+        return None not in (
+            self.base_lane,
+            self.base_waypoints,
+            self.waypoints_2d,
+            self.waypoint_tree)
 
     def get_closest_waypoint_index(self):
         position = self.pose.pose.position
@@ -90,9 +89,6 @@ class WaypointUpdater(object):
 
         return closest_index
 
-    def is_stopline_ahead(self, lookahead_index):
-        return self.stopline_wp_idx != -1 and self.stopline_wp_idx < lookahead_index
-
     def generate_lane(self, index):
         lane = Lane()
         lookahead_index = index + LOOKAHEAD_WPS
@@ -100,6 +96,9 @@ class WaypointUpdater(object):
         lane.waypoints = waypoints if not self.is_stopline_ahead(
             lookahead_index) else self.decelerate_waypoints(waypoints, index)
         return lane
+
+    def is_stopline_ahead(self, lookahead_index):
+        return self.stopline_wp_idx != -1 and self.stopline_wp_idx < lookahead_index
 
     def decelerate_waypoints(self, waypoints, closest_idx):
         temp = []

@@ -15,8 +15,32 @@ three components, the traffic light detector (`tl_detector`), the waypoint updat
 (`waypoint_updater`), and drive-by-wire for vehicle control (`twist_controller`).
 
 ### Traffic Light Detector
+The code for this node can be found in `tl_detector.py` and `tl_classifier.py`.
 
+#### `tl_detector.py`
+The traffic light detection node subscribes to four topics: `base_waypoints`, `current_pose`, `image_color` and
+`traffic_lights`. `TLDetector` is responsible for finding the nearest traffic light position calculated on
+`distanceCalculation()` method and calls `light_classifier.get_classification()` with the current camera image. It
+uses the light classifier to get a color prediction. The node then publishes `traffic_waypoints` - the location of any
+upcoming red lights for other nodes to control the vehicle.
 
+#### `tl_classifier.py`
+For traffic light detection and classification we decided to use an SSD (Single Shot MultiBox Detector) network as the
+purpose of an SSD is detect the location and classify the detected object in one pass through the network. This will
+improve performance for two reasons:
+
+- Detection and classification are now a single function instead of two operations running on the same image. This
+  eliminates and potential duplication of work.
+- The network chosen [faster_rcnn_resnet101](http://download.tensorflow.org/models/object_detection/faster_rcnn_resnet101_lowproposals_coco_2018_01_28.tar.gz)
+  is relatively performant running at > 10fps on the students mid tier gpu (Nvidia GTX 1060).
+
+Due to the limited amount of data available to train the network the decision was made to take a pre-trained network
+and transfer learn the network on the available simulated and real datasets provided by Udacity. The chosen network was
+pre-trained with the COCO dataset.
+
+Transfer learning was achieved using the Object Detection API provided by Tensorflow. For simulated data the network
+was trained on the provided data by Udacity, however real data provided by Udacity was supplemented with a dataset of
+labelled traffic lights provided by Bosch. This dataset can be found [here](https://hci.iwr.uni-heidelberg.de/node/6132).
 
 ### Waypoint Updater
 
@@ -140,14 +164,15 @@ git clone https://github.com/udacity/CarND-Capstone.git
 cd CarND-Capstone
 pip install -r requirements.txt
 ```
-3. Make and run styx
+3. Download trained models from [google drive](https://drive.google.com/open?id=1eEc9RTVZXSub1YJOyDqYlMAPLl32r9UB) and move models into `ros/src/tl_detector/perception/` .
+4. Make and run styx
 ```bash
 cd ros
 catkin_make
 source devel/setup.sh
 roslaunch launch/styx.launch
 ```
-4. Run the simulator
+5. Run the simulator
 
 ### Real world testing
 1. Download [training bag](https://s3-us-west-1.amazonaws.com/udacity-selfdrivingcar/traffic_light_bag_file.zip) that was recorded on the Udacity self-driving car.
