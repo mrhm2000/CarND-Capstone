@@ -88,7 +88,6 @@ class DBWNode(object):
         self.dbw_enabled = None
         self.linear_velocity = None
         self.angular_velocity = None
-        self.throttle = self.steering = self.brake = 0
 
         self.current_position = None
         self.waypoints = None
@@ -98,22 +97,21 @@ class DBWNode(object):
     def loop(self):
         rate = rospy.Rate(50) # 50Hz
         while not rospy.is_shutdown():
-            if None not in (self.current_velocity,
-                            self.linear_velocity,
-                            self.angular_velocity):
+            if self.dbw_enabled and None not in (
+                    self.current_velocity,
+                    self.linear_velocity,
+                    self.angular_velocity):
                 cte = 0.
                 if None not in (self.current_position, self.waypoints):
                     cte = self.calculate_cte()
                     self.cte_pub.publish(cte)
 
-                self.throttle, self.brake, self.steering = \
-                    self.controller.control(self.current_velocity,
-                                            self.dbw_enabled,
-                                            self.linear_velocity,
-                                            self.angular_velocity,
-                                            cte)
-                if self.dbw_enabled:
-                    self.publish(self.throttle, self.brake, self.steering)
+                throttle, brake, steering = self.controller.control(
+                    self.current_velocity,
+                    self.linear_velocity,
+                    self.angular_velocity,
+                    cte)
+                self.publish(throttle, brake, steering)
                 rate.sleep()
 
     def dbw_enabled_cb(self, msg):

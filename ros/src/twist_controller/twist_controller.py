@@ -33,7 +33,7 @@ class Controller(object):
             max_steer_angle=max_steer_angle)
 
         self.steering_controller = PID(
-            kp=.0, ki=.001, kd=.1, min=-max_steer_angle, max=max_steer_angle)
+            kp=.0, ki=.001, kd=.1, min=-.2, max=.2)
 
         # Throttle controller
         self.throttle_controller = PID(
@@ -53,15 +53,9 @@ class Controller(object):
     def control(
             self,
             current_velocity,
-            dbw_enabled,
             linear_velocity,
             angular_velocity,
             cte):
-        if not dbw_enabled:
-            self.throttle_controller.reset()
-            self.steering_controller.reset()
-            return .0, .0, .0
-
         current_velocity = self.low_pass.filter(current_velocity)
 
         # Calculate the velocity error
@@ -86,7 +80,7 @@ class Controller(object):
         if linear_velocity < 0. and current_velocity < self.vehicle_min_velocity:
             # Keep car in place when it is stopped
             throttle = 0.
-            brake = 400.
+            brake = 700.
         elif throttle < .1 and dv < 0.:
             throttle = 0.
             decel = max(dv, self.decel_limit)
