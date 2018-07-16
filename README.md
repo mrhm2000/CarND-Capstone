@@ -40,7 +40,9 @@ pre-trained with the COCO dataset.
 
 Transfer learning was achieved using the Object Detection API provided by Tensorflow. For simulated data the network
 was trained on the provided data by Udacity, however real data provided by Udacity was supplemented with a dataset of
-labelled traffic lights provided by Bosch. This dataset can be found [here](https://hci.iwr.uni-heidelberg.de/node/6132).
+labelled traffic lights provided by Bosch. This dataset can be found [here](https://hci.iwr.uni-heidelberg.de/node/6132). 
+
+Classification files can be found [here](https://drive.google.com/drive/folders/1eEc9RTVZXSub1YJOyDqYlMAPLl32r9UB) and install under "src\tl_detector\perception" directory.
 
 ### Waypoint Updater
 
